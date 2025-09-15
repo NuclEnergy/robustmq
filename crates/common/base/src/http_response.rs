@@ -12,23 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct AdminServerResponse<T> {
-    pub code: u64,
-    pub data: T,
+pub struct AdminServerResponse<T>
+where
+    T: Serialize,
+{
+    code: u64,
+    data: T,
 }
 
-pub fn success_response<T: Serialize>(data: T) -> String {
-    let resp = AdminServerResponse { code: 0, data };
-    serde_json::to_string(&resp).unwrap()
+impl<T: Serialize> AdminServerResponse<T> {
+    pub fn new(code: u64, data: T) -> Self {
+        Self { code, data }
+    }
+
+    pub fn ok(data: T) -> Self {
+        Self::new(0, data)
+    }
+
+    pub fn err(data: T) -> Self {
+        Self::new(100, data)
+    }
+
+    pub fn code(&self) -> u64 {
+        self.code
+    }
+
+    pub fn data(self) -> T {
+        self.data
+    }
+
+    pub fn is_ok(&self) -> bool {
+        self.code == 0
+    }
 }
 
-pub fn error_response(err: String) -> String {
-    let resp = AdminServerResponse {
-        code: 100,
-        data: err,
-    };
-    serde_json::to_string(&resp).unwrap()
+impl AdminServerResponse<String> {
+    pub fn success() -> Self {
+        Self::new(0, "success".to_string())
+    }
+}
+
+impl<T: Serialize> IntoResponse for AdminServerResponse<T> {
+    fn into_response(self) -> axum::response::Response {
+        let body = Json(self);
+
+        (StatusCode::OK, body).into_response()
+    }
 }

@@ -20,9 +20,7 @@ use crate::{
 use axum::{extract::State, Json};
 use broker_core::{cache::BrokerCacheManager, cluster::ClusterStorage};
 use common_base::{
-    error::common::CommonError,
-    http_response::{error_response, success_response},
-    tools::now_second,
+    error::common::CommonError, http_response::AdminServerResponse, tools::now_second,
 };
 use common_config::broker::broker_config;
 use grpc_clients::pool::ClientPool;
@@ -33,7 +31,9 @@ use mqtt_broker::{
 use network_server::common::connection_manager::ConnectionManager;
 use std::sync::Arc;
 
-pub async fn overview(State(state): State<Arc<HttpState>>) -> String {
+pub async fn overview(
+    State(state): State<Arc<HttpState>>,
+) -> Result<AdminServerResponse<OverViewResp>, AdminServerResponse<String>> {
     match cluster_overview_by_req(
         &state.client_pool,
         &state.mqtt_context.subscribe_manager,
@@ -43,18 +43,18 @@ pub async fn overview(State(state): State<Arc<HttpState>>) -> String {
     )
     .await
     {
-        Ok(data) => success_response(data),
-        Err(e) => error_response(e.to_string()),
+        Ok(data) => Ok(AdminServerResponse::ok(data)),
+        Err(e) => Err(AdminServerResponse::err(e.to_string())),
     }
 }
 
 pub async fn overview_metrics(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<OverviewMetricsReq>,
-) -> String {
+) -> Result<AdminServerResponse<OverViewMetricsResp>, AdminServerResponse<String>> {
     match cluster_overview_metrics_by_req(&state.mqtt_context.metrics_manager, &params).await {
-        Ok(data) => success_response(data),
-        Err(e) => error_response(e.to_string()),
+        Ok(data) => Ok(AdminServerResponse::ok(data)),
+        Err(e) => Err(AdminServerResponse::err(e.to_string())),
     }
 }
 

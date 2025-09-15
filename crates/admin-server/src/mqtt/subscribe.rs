@@ -24,10 +24,9 @@ use crate::{
     state::HttpState,
     tool::query::{apply_filters, apply_pagination, apply_sorting, build_query_params, Queryable},
 };
-use axum::{extract::State, Json};
+use axum::{extract::State, http::StatusCode, Json};
 use common_base::{
-    http_response::{error_response, success_response},
-    utils::time_util::timestamp_to_local_datetime,
+    http_response::AdminServerResponse, utils::time_util::timestamp_to_local_datetime,
 };
 use metadata_struct::mqtt::{
     auto_subscribe_rule::MqttAutoSubscribeRule, subscribe_data::is_mqtt_share_subscribe,
@@ -39,7 +38,7 @@ use std::sync::Arc;
 pub async fn subscribe_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<SubscribeListReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<SubscribeListRow>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -71,7 +70,7 @@ pub async fn subscribe_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })
@@ -86,17 +85,18 @@ impl Queryable for SubscribeListRow {
     }
 }
 
+// Can work, but not content
 pub async fn subscribe_detail(
     State(_state): State<Arc<HttpState>>,
     Json(_params): Json<SubscribeDetailReq>,
-) -> String {
-    success_response("")
+) -> StatusCode {
+    StatusCode::NO_CONTENT
 }
 
 pub async fn auto_subscribe_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<AutoSubscribeListReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<AutoSubscribeListRow>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -121,7 +121,7 @@ pub async fn auto_subscribe_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })
@@ -139,17 +139,17 @@ impl Queryable for AutoSubscribeListRow {
 pub async fn auto_subscribe_create(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<CreateAutoSubscribeReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let qos_new = if let Some(qos) = qos(params.qos as u8) {
         qos
     } else {
-        return error_response("Inconsistent QoS format".to_string());
+        return AdminServerResponse::err("Inconsistent QoS format".to_string());
     };
 
     let handing = if let Some(handing) = retain_forward_rule(params.retained_handling as u8) {
         handing
     } else {
-        return error_response("Inconsistent RetainHandling format".to_string());
+        return AdminServerResponse::err("Inconsistent RetainHandling format".to_string());
     };
 
     let auto_subscribe_rule = MqttAutoSubscribeRule {
@@ -166,7 +166,7 @@ pub async fn auto_subscribe_create(
         .set_auto_subscribe_rule(auto_subscribe_rule.clone())
         .await
     {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
 
     state
@@ -174,19 +174,19 @@ pub async fn auto_subscribe_create(
         .cache_manager
         .add_auto_subscribe_rule(auto_subscribe_rule);
 
-    success_response("success")
+    AdminServerResponse::success()
 }
 
 pub async fn auto_subscribe_delete(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<DeleteAutoSubscribeReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let auto_subscribe_storage = AutoSubscribeStorage::new(state.client_pool.clone());
     if let Err(e) = auto_subscribe_storage
         .delete_auto_subscribe_rule(params.topic_name.clone())
         .await
     {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
 
     state
@@ -194,13 +194,13 @@ pub async fn auto_subscribe_delete(
         .cache_manager
         .delete_auto_subscribe_rule(&state.broker_cache.cluster_name, &params.topic_name);
 
-    success_response("success")
+    AdminServerResponse::success()
 }
 
 pub async fn slow_subscribe_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<AutoSubscribeListReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<SlowSubscribeListRow>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -232,7 +232,7 @@ pub async fn slow_subscribe_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })

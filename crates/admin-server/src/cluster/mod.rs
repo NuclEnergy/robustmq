@@ -19,16 +19,14 @@ use crate::{
     state::HttpState,
 };
 use axum::{extract::State, Json};
-use common_base::{
-    enum_type::feature_type::FeatureType,
-    http_response::{error_response, success_response},
-};
+use common_base::{enum_type::feature_type::FeatureType, http_response::AdminServerResponse};
+use common_config::config::BrokerConfig;
 use std::str::FromStr;
 
 pub async fn cluster_config_set(
     State(_state): State<Arc<HttpState>>,
     Json(params): Json<ClusterConfigSetReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     match FeatureType::from_str(params.config_type.as_str()) {
         Ok(FeatureType::SlowSubscribe) => {
             // let mut config = cache_manager.get_slow_sub_config();
@@ -59,16 +57,16 @@ pub async fn cluster_config_set(
         Ok(FeatureType::FlappingDetect) => {}
 
         Err(e) => {
-            return error_response(format!("Failed to parse feature type: {e}"));
+            return AdminServerResponse::err(format!("Failed to parse feature type: {e}"));
         }
     }
-    success_response("success")
+    AdminServerResponse::success()
 }
 
 pub async fn cluster_config_get(
     State(state): State<Arc<HttpState>>,
     Json(_params): Json<ClusterConfigGetReq>,
-) -> String {
+) -> AdminServerResponse<BrokerConfig> {
     let broker_config = state.broker_cache.get_cluster_config();
-    success_response(broker_config)
+    AdminServerResponse::ok(broker_config)
 }

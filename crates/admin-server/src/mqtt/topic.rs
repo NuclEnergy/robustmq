@@ -22,10 +22,7 @@ use crate::{
     tool::query::{apply_filters, apply_pagination, apply_sorting, build_query_params, Queryable},
 };
 use axum::{extract::State, Json};
-use common_base::{
-    http_response::{error_response, success_response},
-    tools::now_mills,
-};
+use common_base::{http_response::AdminServerResponse, tools::now_mills};
 use metadata_struct::mqtt::topic_rewrite_rule::MqttTopicRewriteRule;
 use mqtt_broker::storage::topic::TopicStorage;
 use std::sync::Arc;
@@ -33,7 +30,7 @@ use std::sync::Arc;
 pub async fn topic_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<TopicListReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<TopicListRow>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -69,7 +66,7 @@ pub async fn topic_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })
@@ -87,7 +84,7 @@ impl Queryable for TopicListRow {
 pub async fn topic_rewrite_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<TopicRewriteReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<TopicRewriteListRow>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -112,7 +109,8 @@ pub async fn topic_rewrite_list(
     let filtered = apply_filters(topic_rewrite_rules, &options);
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
-    success_response(PageReplyData {
+
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })
@@ -132,7 +130,7 @@ impl Queryable for TopicRewriteListRow {
 pub async fn topic_rewrite_create(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<CreateTopicRewriteReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let rule = MqttTopicRewriteRule {
         cluster: state.broker_cache.cluster_name.clone(),
         action: params.action.clone(),
@@ -144,7 +142,7 @@ pub async fn topic_rewrite_create(
 
     let topic_storage = TopicStorage::new(state.client_pool.clone());
     if let Err(e) = topic_storage.create_topic_rewrite_rule(rule.clone()).await {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
 
     state
@@ -152,24 +150,24 @@ pub async fn topic_rewrite_create(
         .cache_manager
         .add_topic_rewrite_rule(rule);
 
-    success_response("success")
+    AdminServerResponse::success()
 }
 
 pub async fn topic_rewrite_delete(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<DeleteTopicRewriteReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let topic_storage = TopicStorage::new(state.client_pool.clone());
     if let Err(e) = topic_storage
         .delete_topic_rewrite_rule(params.action.clone(), params.source_topic.clone())
         .await
     {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
     state.mqtt_context.cache_manager.delete_topic_rewrite_rule(
         &state.broker_cache.cluster_name,
         &params.action,
         &params.source_topic,
     );
-    success_response("success")
+    AdminServerResponse::success()
 }

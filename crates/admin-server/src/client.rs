@@ -15,7 +15,7 @@
 use crate::response::PageReplyData;
 use common_base::http_response::AdminServerResponse;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -70,7 +70,7 @@ impl AdminHttpClient {
     pub async fn post<T, R>(&self, endpoint: &str, request: &T) -> Result<R, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         let url = self.build_url(endpoint)?;
         let response = self
@@ -81,32 +81,24 @@ impl AdminHttpClient {
             .send()
             .await?;
         let status = response.status();
-        let response_text = response.text().await?;
 
         if !status.is_success() {
             return Err(HttpClientError::ServerError {
                 code: status.as_u16() as u64,
-                message: response_text,
+                message: response.text().await?,
             });
         }
 
-        // Try to parse as AdminServerResponse first
-        match serde_json::from_str::<AdminServerResponse<R>>(&response_text) {
-            Ok(api_response) => {
-                if api_response.code == 0 {
-                    Ok(api_response.data)
-                } else {
-                    Err(HttpClientError::ServerError {
-                        code: api_response.code,
-                        message: format!("Server error code: {}", api_response.code),
-                    })
-                }
-            }
-            Err(_) => {
-                // If not ApiResponse format, try to parse directly as the expected type
-                serde_json::from_str::<R>(&response_text)
-                    .map_err(HttpClientError::JsonSerializationFailed)
-            }
+        // Parse as AdminServerResponse
+        let api_response = response.json::<AdminServerResponse<R>>().await?;
+
+        if api_response.is_ok() {
+            Ok(api_response.data())
+        } else {
+            Err(HttpClientError::ServerError {
+                code: api_response.code(),
+                message: format!("Server error with code: {}", api_response.code()),
+            })
         }
     }
 
@@ -187,9 +179,9 @@ impl AdminHttpClient {
     }
 
     /// Get cluster overview
-    pub async fn get_cluster_overview<T>(&self) -> Result<T, HttpClientError>
+    pub async fn get_cluster_overview<R>(&self) -> Result<R, HttpClientError>
     where
-        T: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         let empty_request = serde_json::json!({});
         self.post("/mqtt/overview", &empty_request).await
@@ -199,7 +191,7 @@ impl AdminHttpClient {
     pub async fn get_cluster_metrics<T, R>(&self, request: &T) -> Result<R, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/overview/metrics", request).await
     }
@@ -211,7 +203,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/client/list", request).await
     }
@@ -223,7 +215,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/session/list", request).await
     }
@@ -235,7 +227,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/topic/list", request).await
     }
@@ -247,7 +239,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/subscribe/list", request).await
     }
@@ -259,7 +251,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/user/list", request).await
     }
@@ -284,7 +276,7 @@ impl AdminHttpClient {
     pub async fn get_acl_list<T, R>(&self, request: &T) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/acl/list", request).await
     }
@@ -312,7 +304,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/blacklist/list", request).await
     }
@@ -340,7 +332,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/connector/list", request).await
     }
@@ -368,7 +360,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/schema/list", request).await
     }
@@ -396,7 +388,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/schema-bind/list", request).await
     }
@@ -424,7 +416,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/system-alarm/list", request).await
     }
@@ -452,7 +444,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/flapping_detect/list", request).await
     }
@@ -464,7 +456,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/topic-rewrite/list", request).await
     }
@@ -492,7 +484,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/auto-subscribe/list", request).await
     }
@@ -520,7 +512,7 @@ impl AdminHttpClient {
     ) -> Result<PageReplyData<R>, HttpClientError>
     where
         T: Serialize,
-        R: for<'de> Deserialize<'de>,
+        R: Serialize + DeserializeOwned,
     {
         self.post("/mqtt/slow-subscribe/list", request).await
     }

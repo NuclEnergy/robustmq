@@ -21,8 +21,7 @@ use crate::{
 use axum::{extract::State, Json};
 use common_base::{
     enum_type::mqtt::acl::mqtt_acl_blacklist_type::get_blacklist_type_by_str,
-    http_response::{error_response, success_response},
-    utils::time_util::timestamp_to_local_datetime,
+    http_response::AdminServerResponse, utils::time_util::timestamp_to_local_datetime,
 };
 use metadata_struct::acl::mqtt_blacklist::MqttAclBlackList;
 use mqtt_broker::security::AuthDriver;
@@ -31,7 +30,8 @@ use std::sync::Arc;
 pub async fn blacklist_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<BlackListListReq>,
-) -> String {
+) -> Result<AdminServerResponse<PageReplyData<Vec<BlackListListRow>>>, AdminServerResponse<String>>
+{
     let options = build_query_params(
         params.page,
         params.limit,
@@ -49,7 +49,7 @@ pub async fn blacklist_list(
     let data = match auth_driver.read_all_blacklist().await {
         Ok(data) => data,
         Err(e) => {
-            return error_response(e.to_string());
+            return Err(AdminServerResponse::err(e.to_string()));
         }
     };
 
@@ -67,10 +67,10 @@ pub async fn blacklist_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    Ok(AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
-    })
+    }))
 }
 
 impl Queryable for BlackListListRow {
@@ -86,11 +86,11 @@ impl Queryable for BlackListListRow {
 pub async fn blacklist_create(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<CreateBlackListReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let blacklist_type = match get_blacklist_type_by_str(&params.blacklist_type) {
         Ok(blacklist_type) => blacklist_type,
         Err(e) => {
-            return error_response(e.to_string());
+            return AdminServerResponse::err(e.to_string());
         }
     };
 
@@ -106,19 +106,19 @@ pub async fn blacklist_create(
     );
 
     match auth_driver.save_blacklist(mqtt_blacklist).await {
-        Ok(_) => success_response("success"),
-        Err(e) => error_response(e.to_string()),
+        Ok(_) => AdminServerResponse::success(),
+        Err(e) => AdminServerResponse::err(e.to_string()),
     }
 }
 
 pub async fn blacklist_delete(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<DeleteBlackListReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let blacklist_type = match get_blacklist_type_by_str(&params.blacklist_type) {
         Ok(blacklist_type) => blacklist_type,
         Err(e) => {
-            return error_response(e.to_string());
+            return AdminServerResponse::err(e.to_string());
         }
     };
     let mqtt_blacklist = MqttAclBlackList {
@@ -133,7 +133,7 @@ pub async fn blacklist_delete(
         state.client_pool.clone(),
     );
     match auth_driver.delete_blacklist(mqtt_blacklist).await {
-        Ok(_) => success_response("success"),
-        Err(e) => error_response(e.to_string()),
+        Ok(_) => AdminServerResponse::success(),
+        Err(e) => AdminServerResponse::err(e.to_string()),
     }
 }

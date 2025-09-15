@@ -22,13 +22,15 @@ use crate::{
     tool::query::{apply_filters, apply_pagination, apply_sorting, build_query_params, Queryable},
 };
 use axum::{extract::State, Json};
-use common_base::{http_response::success_response, utils::time_util::timestamp_to_local_datetime};
+use common_base::{
+    http_response::AdminServerResponse, utils::time_util::timestamp_to_local_datetime,
+};
 use std::sync::Arc;
 
 pub async fn system_alarm_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<SystemAlarmListReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<SystemAlarmListRow>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -59,7 +61,7 @@ pub async fn system_alarm_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })
@@ -78,7 +80,7 @@ impl Queryable for SystemAlarmListRow {
 pub async fn flapping_detect_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<SystemAlarmListReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<FlappingDetectListRaw>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -109,7 +111,7 @@ pub async fn flapping_detect_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })

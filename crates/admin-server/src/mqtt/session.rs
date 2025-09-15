@@ -19,13 +19,13 @@ use crate::{
     tool::query::{apply_filters, apply_pagination, apply_sorting, build_query_params, Queryable},
 };
 use axum::{extract::State, Json};
-use common_base::http_response::success_response;
+use common_base::http_response::AdminServerResponse;
 use std::sync::Arc;
 
 pub async fn session_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<SessionListReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<SessionListRow>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -75,7 +75,7 @@ pub async fn session_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })

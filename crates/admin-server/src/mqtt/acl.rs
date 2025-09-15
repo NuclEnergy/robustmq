@@ -25,7 +25,7 @@ use common_base::{
         mqtt_acl_resource_type::MqttAclResourceType,
     },
     error::{common::CommonError, ResultCommonError},
-    http_response::{error_response, success_response},
+    http_response::AdminServerResponse,
 };
 use metadata_struct::acl::mqtt_acl::MqttAcl;
 use mqtt_broker::security::AuthDriver;
@@ -34,7 +34,7 @@ use std::{str::FromStr, sync::Arc};
 pub async fn acl_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<AclListReq>,
-) -> String {
+) -> Result<AdminServerResponse<PageReplyData<Vec<AclListRow>>>, AdminServerResponse<String>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -51,7 +51,7 @@ pub async fn acl_list(
     let data = match auth_driver.read_all_acl().await {
         Ok(data) => data,
         Err(e) => {
-            return error_response(e.to_string());
+            return Err(AdminServerResponse::err(e.to_string()));
         }
     };
 
@@ -71,10 +71,10 @@ pub async fn acl_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    Ok(AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
-    })
+    }))
 }
 
 impl Queryable for AclListRow {
@@ -92,10 +92,10 @@ impl Queryable for AclListRow {
 pub async fn acl_create(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<CreateAclReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     match acl_create_inner(&state, &params).await {
-        Ok(_) => success_response("success"),
-        Err(e) => error_response(e.to_string()),
+        Ok(_) => AdminServerResponse::success(),
+        Err(e) => AdminServerResponse::err(e.to_string()),
     }
 }
 
@@ -142,10 +142,10 @@ async fn acl_create_inner(state: &Arc<HttpState>, params: &CreateAclReq) -> Resu
 pub async fn acl_delete(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<DeleteAclReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     match acl_delete_inner(&state, &params).await {
-        Ok(_) => success_response("success"),
-        Err(e) => error_response(e.to_string()),
+        Ok(_) => AdminServerResponse::success(),
+        Err(e) => AdminServerResponse::err(e.to_string()),
     }
 }
 

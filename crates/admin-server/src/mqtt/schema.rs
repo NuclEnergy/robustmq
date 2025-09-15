@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use axum::{extract::State, Json};
-use common_base::http_response::{error_response, success_response};
+use common_base::http_response::AdminServerResponse;
 use common_config::broker::broker_config;
 use metadata_struct::schema::{SchemaData, SchemaResourceBind, SchemaType};
 use mqtt_broker::{handler::error::MqttBrokerError, storage::schema::SchemaStorage};
@@ -35,7 +35,7 @@ use crate::{
 pub async fn schema_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<SchemaListReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<SchemaListRow>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -60,7 +60,7 @@ pub async fn schema_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })
@@ -79,11 +79,11 @@ impl Queryable for SchemaListRow {
 pub async fn schema_create(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<CreateSchemaReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     if let Err(e) = schema_create_inner(state, params).await {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
-    success_response("success")
+    AdminServerResponse::success()
 }
 
 pub async fn schema_create_inner(
@@ -115,22 +115,22 @@ pub async fn schema_create_inner(
 pub async fn schema_delete(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<DeleteSchemaReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let schema_storage = SchemaStorage::new(state.client_pool.clone());
     if let Err(e) = schema_storage.delete(params.schema_name.clone()).await {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
     state
         .mqtt_context
         .schema_manager
         .remove_schema(&params.schema_name);
-    success_response("success")
+    AdminServerResponse::success()
 }
 
 pub async fn schema_bind_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<SchemaBindListReq>,
-) -> String {
+) -> AdminServerResponse<PageReplyData<Vec<SchemaBindListRow>>> {
     let options = build_query_params(
         params.page,
         params.limit,
@@ -169,7 +169,7 @@ pub async fn schema_bind_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
     })
@@ -184,13 +184,13 @@ impl Queryable for SchemaBindListRow {
 pub async fn schema_bind_create(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<CreateSchemaBindReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let schema_storage = SchemaStorage::new(state.client_pool.clone());
     if let Err(e) = schema_storage
         .create_bind(&params.schema_name, &params.resource_name)
         .await
     {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
 
     let config = broker_config();
@@ -200,19 +200,19 @@ pub async fn schema_bind_create(
         resource_name: params.resource_name,
     };
     state.mqtt_context.schema_manager.add_bind(&bind);
-    success_response("success")
+    AdminServerResponse::success()
 }
 
 pub async fn schema_bind_delete(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<DeleteSchemaBindReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let schema_storage = SchemaStorage::new(state.client_pool.clone());
     if let Err(e) = schema_storage
         .delete_bind(&params.schema_name, &params.resource_name)
         .await
     {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
 
     let config = broker_config();
@@ -222,5 +222,5 @@ pub async fn schema_bind_delete(
         resource_name: params.resource_name,
     };
     state.mqtt_context.schema_manager.remove_bind(&bind);
-    success_response("success")
+    AdminServerResponse::success()
 }

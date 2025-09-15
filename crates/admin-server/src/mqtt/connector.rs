@@ -20,9 +20,7 @@ use crate::{
 };
 use axum::{extract::State, Json};
 use common_base::{
-    error::ResultCommonError,
-    http_response::{error_response, success_response},
-    tools::now_second,
+    error::ResultCommonError, http_response::AdminServerResponse, tools::now_second,
     utils::time_util::timestamp_to_local_datetime,
 };
 use metadata_struct::mqtt::bridge::{
@@ -39,7 +37,8 @@ use std::sync::Arc;
 pub async fn connector_list(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<ConnectorListReq>,
-) -> String {
+) -> Result<AdminServerResponse<PageReplyData<Vec<ConnectorListRow>>>, AdminServerResponse<String>>
+{
     let options = build_query_params(
         params.page,
         params.limit,
@@ -72,10 +71,10 @@ pub async fn connector_list(
     let sorted = apply_sorting(filtered, &options);
     let pagination = apply_pagination(sorted, &options);
 
-    success_response(PageReplyData {
+    Ok(AdminServerResponse::ok(PageReplyData {
         data: pagination.0,
         total_count: pagination.1,
-    })
+    }))
 }
 
 impl Queryable for ConnectorListRow {
@@ -94,26 +93,26 @@ impl Queryable for ConnectorListRow {
 pub async fn connector_create(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<CreateConnectorReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     if let Err(e) = connector_create_inner(&state, params).await {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
-    success_response("success")
+    AdminServerResponse::success()
 }
 
 pub async fn connector_delete(
     State(state): State<Arc<HttpState>>,
     Json(params): Json<DeleteConnectorReq>,
-) -> String {
+) -> AdminServerResponse<String> {
     let storage = ConnectorStorage::new(state.client_pool.clone());
     if let Err(e) = storage
         .delete_connector(&state.broker_cache.cluster_name, &params.connector_name)
         .await
     {
-        return error_response(e.to_string());
+        return AdminServerResponse::err(e.to_string());
     }
 
-    success_response("success")
+    AdminServerResponse::success()
 }
 
 async fn connector_create_inner(
